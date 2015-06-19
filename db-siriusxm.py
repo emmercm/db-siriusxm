@@ -1,3 +1,4 @@
+import argparse
 from bs4 import BeautifulSoup
 import re
 import requests
@@ -13,6 +14,28 @@ REQUESTS_TIMEOUT = 5
 SLEEP_MIN = 15
 SLEEP_INCREMENT = 5
 SLEEP_MAX = 60
+
+
+# Parse command line arguments
+def num_list(arg):
+	nums = []
+	if not arg is None:
+		for num in arg.split(','):
+			if num.find('-') >= 0:
+				minmax = num.split('-')
+				if minmax[0] == '': minmax[0] = 0
+				if minmax[1] == '': minmax[1] = 999
+				nums.extend(range(int(minmax[0]), int(minmax[1])+1))
+			else:
+				nums.append(int(num))
+	return list(set(nums))
+	
+parser = argparse.ArgumentParser(prog=SCRIPT_NAME)
+parser.add_argument('-c', metavar='N[-N][,N-N]', dest='whitelist', help='channel whitelist')
+parser.add_argument('-C', metavar='N[-N][,N-N]', dest='blacklist', help='channel blacklist')
+args = parser.parse_args()
+args.whitelist = num_list(args.whitelist)
+args.blacklist = num_list(args.blacklist)
 
 
 def log(s):
@@ -220,10 +243,16 @@ def Scrape_DogstarRadio():
 	
 # Clean the output from scrapers
 def Scrape_Clean(channels):
-	for (idx, channel) in enumerate(channels):
+	for channel in channels[:]:
+		# Unset whitelist/blacklist channels
+		if (len(args.whitelist) > 0 and not channel['channel'] in args.whitelist) or (channel['channel'] in args.blacklist):
+			channels.remove(channel)
+			continue
+		# Clean strings
+		if channel['name'] == '': channel['name'] = 'Channel ' + str(channel['channel'])
 		for key in channel.keys():
 			if type(channel[key]) is str:
-				channels[idx][key] = channel[key].strip()
+				channel[key] = channel[key].strip()
 	return channels
 
 
