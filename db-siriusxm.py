@@ -112,21 +112,34 @@ def DB_INSERT(db_curs, channels):
 	if len(channels) > 0: db_curs.execute("BEGIN")
 	
 	for channel in channels:
-		db_curs.execute("""INSERT OR REPLACE INTO channels (number, name) VALUES (?, ?)""", (channel['channel'], channel['name']))
+		db_curs.execute("""SELECT name FROM channels WHERE number = ?""", (channel['channel'],))
+		channel_name = db_curs.fetchone()
+		if channel_name is None or channel_name[0] != channel['name']:
+			db_curs.execute("""INSERT OR REPLACE INTO channels (number, name) VALUES (?, ?)""", (channel['channel'], channel['name']))
 		channel_id = channel['channel']
 		
-		db_curs.execute("""INSERT OR IGNORE INTO artists (name) VALUES (?)""", (channel['artist'],))
 		db_curs.execute("""SELECT _id FROM artists WHERE name = ?""", (channel['artist'],))
-		artist_id = db_curs.fetchall()[0][0]  # assumes INSERT is good
-		
-		db_curs.execute("""INSERT OR IGNORE INTO tracks (artist, title) VALUES (?, ?)""", (artist_id, channel['track']))
+		artist_id = db_curs.fetchone()
+		if artist_id is None:
+			db_curs.execute("""INSERT INTO artists (name) VALUES (?)""", (channel['artist'],))
+			db_curs.execute("""SELECT _id FROM artists WHERE name = ?""", (channel['artist'],))
+			artist_id = db_curs.fetchone()[0]  # assumes INSERT is good
+		else:
+			artist_id = artist_id[0]
+			
 		db_curs.execute("""SELECT _id FROM tracks WHERE artist = ? AND title = ?""", (artist_id, channel['track']))
-		track_id = db_curs.fetchall()[0][0]  # assumes INSERT is good
-		
+		track_id = db_curs.fetchone()
+		if track_id is None:
+			db_curs.execute("""INSERT INTO tracks (artist, title) VALUES (?, ?)""", (artist_id, channel['track']))
+			db_curs.execute("""SELECT _id FROM tracks WHERE artist = ? AND title = ?""", (artist_id, channel['track']))
+			track_id = db_curs.fetchone()[0]  # assumes INSERT is good
+		else:
+			track_id = track_id[0]
+			
 		# Check if we already have the same entry recently
-		db_curs.execute("""SELECT track FROM entries WHERE channel = ? AND track = ? AND datetime(time,'unixepoch') > datetime('now','-10 minutes')""", (channel_id,track_id))
-		channel_last = db_curs.fetchall()
-		if len(channel_last) > 0: continue  # current track was already recorded
+		db_curs.execute("""SELECT track FROM entries WHERE channel = ? AND track = ? AND datetime(time,'unixepoch') > datetime('now','-10 minutes')""", (channel_id, track_id))
+		entry_recent = db_curs.fetchone()
+		if not entry_recent is None: continue  # current track was already recorded
 		db_curs.execute("""INSERT INTO entries (channel, track, time) VALUES (?, ? ,?)""", (channel_id, track_id, channel['time']))
 		entries_inserted +=1
 		
