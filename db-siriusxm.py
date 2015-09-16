@@ -196,7 +196,7 @@ def HTML_GetTree(url):
 		html = string.replace(html, tag, tag_repl)
 		
 	# Parse garbage HTML with BeautifulSoup
-	soup = BeautifulSoup(html)
+	soup = BeautifulSoup(html, "lxml")
 	# Parse cleaned HTML with ElementTree
 	root = et.fromstring(str(soup))
 	return root
