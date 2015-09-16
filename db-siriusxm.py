@@ -97,6 +97,7 @@ def DB_CREATE(db_curs):
 		track    INTEGER NOT NULL,
 		time     INTEGER NOT NULL
 		);""")
+	db_curs.execute("""CREATE UNIQUE INDEX IF NOT EXISTS ix_entries_channel_time ON entries (channel, time)""")
 	# entries.channel REFERENCES channels(number)  ON INSERT RESTRICT  ON UPDATE CASCADE  ON DELETE CASCADE
 	db_curs.execute("""CREATE TRIGGER IF NOT EXISTS tr_entries_insert_channel
 		BEFORE INSERT on entries
