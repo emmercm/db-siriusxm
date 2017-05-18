@@ -1,11 +1,10 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import argparse
 from bs4 import BeautifulSoup
 import re
 import requests
 import sqlite3 as sql
-import string
 import sys
 import time
 import xml.etree.ElementTree as et
@@ -198,7 +197,8 @@ def db_count(db_curs):
 def html_get_tree(url):
     try:
         resp = requests.get(url, timeout=REQUESTS_TIMEOUT)
-        html = resp.text.encode('utf-8')
+        resp.encoding = 'utf-8'
+        html = resp.text
     except:
         return et.fromstring('<html></html>')
 
@@ -211,9 +211,9 @@ def html_get_tree(url):
     # Remove newlines in tags
     for tag in re.findall('(<[^>]+>)', html):
         tag_repl = tag
-        tag_repl = string.replace(tag_repl, '\r', '')
-        tag_repl = string.replace(tag_repl, '\n', '')
-        html = string.replace(html, tag, tag_repl)
+        tag_repl = str.replace(tag_repl, '\r', '')
+        tag_repl = str.replace(tag_repl, '\n', '')
+        html = str.replace(html, tag, tag_repl)
 
     # Parse garbage HTML with BeautifulSoup
     soup = BeautifulSoup(html, "lxml")
@@ -230,7 +230,7 @@ def scrape_dogstar_radio():
     for td in root.findall('.//table//td[div]'):
         channel = {'channel': 0, 'name': '', 'artist': '', 'track': '', 'time': int(time.time())}
 
-        td_text = td.text.encode('utf-8')
+        td_text = td.text
         td_text = re.sub(r'[\r\n]', '', td_text)
 
         # Get channel number
@@ -241,13 +241,13 @@ def scrape_dogstar_radio():
 
         # Get channel name
         for a in td.findall('.//a'):
-            a_text = a.text.encode('utf-8')
+            a_text = a.text
             a_text = re.sub(r'[\r\n]', '', a_text)
             channel['name'] = a_text
 
         # Get channel artist and track
         for div in td.findall('.//div'):
-            div_text = div.text.encode('utf-8')
+            div_text = div.text
             div_text = re.sub(r'[\r\n]', '', div_text)
             div_split = div_text.split(' - ', 1)
             if len(div_split) == 2:
