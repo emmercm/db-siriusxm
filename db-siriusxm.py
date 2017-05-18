@@ -2,6 +2,7 @@
 
 import argparse
 from bs4 import BeautifulSoup
+import pynumparser
 import re
 import requests
 import sqlite3 as sql
@@ -17,29 +18,12 @@ SLEEP_INCREMENT = 5
 SLEEP_MAX = 60
 
 
-# Parse command line arguments
-def num_list(arg):
-    nums = []
-    if arg is not None:
-        for num in arg.split(','):
-            if num.find('-') >= 0:
-                minmax = num.split('-')
-                if minmax[0] == '':
-                    minmax[0] = 0
-                if minmax[1] == '':
-                    minmax[1] = 999
-                nums.extend(range(int(minmax[0]), int(minmax[1]) + 1))
-            else:
-                nums.append(int(num))
-    return list(set(nums))
-
-
 parser = argparse.ArgumentParser(prog=SCRIPT_NAME)
-parser.add_argument('-c', metavar='N[-N][,N-N]', dest='whitelist', help='channel whitelist')
-parser.add_argument('-C', metavar='N[-N][,N-N]', dest='blacklist', help='channel blacklist')
+parser.add_argument('-c', metavar='N[-N][,N-N]', dest='whitelist', help='channel whitelist', type=pynumparser.NumberSequence(limits=(1, None)))
+parser.add_argument('-C', metavar='N[-N][,N-N]', dest='blacklist', help='channel blacklist', type=pynumparser.NumberSequence(limits=(1, None)))
 args = parser.parse_args()
-args.whitelist = num_list(args.whitelist)
-args.blacklist = num_list(args.blacklist)
+args.whitelist = list(args.whitelist or [])
+args.blacklist = list(args.blacklist or [])
 
 
 def log(s):
@@ -258,7 +242,6 @@ def scrape_dogstar_radio():
             continue
 
         channels.append(channel)
-    # if channel['channel'] < 100: print channel
 
     return channels
 
