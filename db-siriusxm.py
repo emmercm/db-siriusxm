@@ -43,6 +43,9 @@ def db_create(db_curs):
     # So instead of REFERENCES() for FOREIGN KEYs we use:
     #   BEFORE INSERT (RESTRICT), AFTER UDPATE (CASCADE), BEFORE DELETE (CASCADE)
 
+    # Try to use some HDD speedups
+    db_curs.execute("PRAGMA journal_mode = MEMORY")
+
     # TABLE channels to store channel number/name
     db_curs.execute("""CREATE TABLE IF NOT EXISTS channels (
         number  INTEGER PRIMARY KEY,
@@ -129,22 +132,34 @@ def db_insert(db_curs, channels):
     if len(channels) > 0:
         db_curs.execute("BEGIN")
 
-    for channel in channels:
-        db_curs.execute("""SELECT name FROM channels WHERE number = ?""", (channel['channel'],))
-        channel_name = db_curs.fetchone()
-        if channel_name is None or channel_name[0] != channel['name']:
-            db_curs.execute("""INSERT OR REPLACE INTO channels (number, name) VALUES (?, ?)""",
-                            (channel['channel'], channel['name']))
-        channel_id = channel['channel']
+    # Get applicable channel names
+    db_curs.execute("""SELECT number, name FROM channels
+                    WHERE number IN ({})""".format(','.join('?' * len(channels))),
+                    [channel['channel'] for channel in channels])
+    channel_names = db_curs.fetchall()
+    channel_names = {channel[0]: channel[1] for channel in channel_names}
 
-        db_curs.execute("""SELECT _id FROM artists WHERE name = ?""", (channel['artist'],))
-        artist_id = db_curs.fetchone()
+    # Get applicable artist IDs
+    db_curs.execute("""SELECT name, _id FROM artists
+                    WHERE name IN ({})""".format(','.join('?' * len(channels))),
+                    [channel['artist'] for channel in channels])
+    artists = db_curs.fetchall()
+    artists = {artist[0]: artist[1] for artist in artists}
+
+    for channel in channels:
+        channel_id = channel['channel']
+        channel_name = channel_names[channel_id] if channel_id in channel_names else None
+        if channel_name is None or channel_name != channel['name']:
+            db_curs.execute("""INSERT OR REPLACE INTO channels (number, name) VALUES (?, ?)""",
+                            (channel_id, channel['name']))
+            channel_name = channel['name']
+
+        artist_id = artists[channel['artist']] if channel['artist'] in artists else None
         if artist_id is None:
             db_curs.execute("""INSERT INTO artists (name) VALUES (?)""", (channel['artist'],))
             db_curs.execute("""SELECT _id FROM artists WHERE name = ?""", (channel['artist'],))
             artist_id = db_curs.fetchone()[0]  # assumes INSERT is good
-        else:
-            artist_id = artist_id[0]
+            artists[channel['artist']] = artist_id
 
         db_curs.execute("""SELECT _id FROM tracks WHERE artist = ? AND title = ?""", (artist_id, channel['track']))
         track_id = db_curs.fetchone()
@@ -163,9 +178,13 @@ def db_insert(db_curs, channels):
         entry_recent = db_curs.fetchone()
         if entry_recent is not None:
             continue  # current track was already recorded
-        db_curs.execute("""INSERT INTO entries (channel, track, time) VALUES (?, ? ,?)""",
-                        (channel_id, track_id, channel['time']))
-        entries_inserted += 1
+        try:
+            db_curs.execute("""INSERT INTO entries (channel, track, time) VALUES (?, ? ,?)""",
+                            (channel_id, track_id, channel['time']))
+        except sql.IntegrityError:  # sqlite3 throws FOREIGN KEY CONSTRAINT incorrectly sometimes?
+            pass
+        else:
+            entries_inserted += 1
 
     if len(channels) > 0:
         db_curs.execute("COMMIT")
